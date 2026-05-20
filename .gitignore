@@ -1,0 +1,64 @@
+COMPLETION_SUMMARY.md
+ERRORS_FIXED.md
+FINAL_CHECKLIST.md
+SETUP_INSTRUCTIONS.md
+START_HERE.md
+# Ignore the above files as they are meant for internal use and documentation purposes only.
+TODO.md
+
+# Node dependencies
+node_modules/
+.npm/
+.pnpm-store/
+.pnp/
+.pnp.js
+12
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+out/
+coverage/
+*.lcov
+.cache/
+.eslintcache
+*.tsbuildinfo
+
+# Frontend (CRA)
+/frontend/build/
+
+# Prisma
+/backend/node_modules/.prisma/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.swp
+*.swo
+*.tmp
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Hosting
+.vercel/
+.netlify/
