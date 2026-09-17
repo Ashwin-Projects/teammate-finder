@@ -1,453 +1,438 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { findMatches, getTeams, createTeam, saveSuggestion } from '../utils/api';
-import { useUserStore } from '../store/useUserStore';
-import AITeamGenerator from '../components/AITeamGenerator';
-import SavedSuggestions from '../components/SavedSuggestions';
-import { tokens } from '../tokens';
+import React, { useEffect, useState } from "react"
+import { useStore } from "../store/useStore"
+import { Button } from "../components/ui/button"
+import { Dialog } from "../components/ui/dialog"
+import { Input } from "../components/ui/input"
 
-interface Match {
-  userId: string;
-  name: string;
-  email: string;
-  skills: string[];
-  interests: string[];
-  competitions: string[];
-  bio: string;
-  summary: string;
-  matchScore: number;
-  experienceLevel: string;
-  availability: string;
-}
+export const Dashboard: React.FC = () => {
+  const {
+    matches,
+    matchesLoading,
+    fetchMatches,
+    teams,
+    fetchTeams,
+    createTeam,
+    addTeamMember,
+    profile,
+    fetchProfile,
+  } = useStore()
 
-interface Team {
-  id: string;
-  name: string;
-  description: string;
-  members: any[];
-  _count: { messages: number };
-}
+  const [selectedMatch, setSelectedMatch] = useState<any | null>(null)
+  const [inviteModalOpen, setInviteModalOpen] = useState(false)
+  const [createTeamModalOpen, setCreateTeamModalOpen] = useState(false)
+  
+  // Create team form state
+  const [newTeamName, setNewTeamName] = useState("")
+  const [newTeamDesc, setNewTeamDesc] = useState("")
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState(false)
 
-const IconUsers = () => (
-  <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-  </svg>
-);
-const IconTeam = () => (
-  <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
-  </svg>
-);
-const IconAI = () => (
-  <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-  </svg>
-);
-const IconProfile = () => (
-  <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-  </svg>
-);
-const IconSignOut = () => (
-  <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-  </svg>
-);
-const IconPlus = () => (
-  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-  </svg>
-);
-const IconClose = () => (
-  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-  </svg>
-);
-
-const SIDEBAR_WIDTH = 200;
-
-const Dashboard: React.FC = () => {
-  const navigate = useNavigate();
-  const { user, isAuthenticated, logout } = useUserStore();
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'matches' | 'teams' | 'ai'>('matches');
-  const [showCreateTeam, setShowCreateTeam] = useState(false);
-  const [newTeamName, setNewTeamName] = useState('');
-  const [newTeamDescription, setNewTeamDescription] = useState('');
-  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
-  const [savedRefreshKey, setSavedRefreshKey] = useState(0);
+  // Filters state
+  const [skillFilter, setSkillFilter] = useState("")
+  const [expFilter, setExpFilter] = useState("all")
+  const [availFilter, setAvailFilter] = useState("all")
 
   useEffect(() => {
-    if (!isAuthenticated) { navigate('/login'); return; }
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, navigate]);
+    fetchProfile().catch(() => {
+      // Gracefully handle if profile is not created yet (redirect to settings)
+      console.log("No profile found. Redirection would be helpful.")
+    })
+    fetchMatches()
+    fetchTeams()
+  }, [fetchMatches, fetchTeams, fetchProfile])
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [matchesRes, teamsRes] = await Promise.all([findMatches(20), getTeams()]);
-      setMatches(matchesRes.matches || []);
-      setTeams(teamsRes.teams || []);
-    } catch (error: any) {
-      console.error('Error loading data:', error);
-      if (error.response?.status === 404) navigate('/profile');
-    } finally {
-      setLoading(false);
+  // Set default selected match when matches list updates
+  useEffect(() => {
+    if (matches.length > 0 && !selectedMatch) {
+      setSelectedMatch(matches[0])
     }
-  };
+  }, [matches, selectedMatch])
 
-  const handleCreateTeam = async () => {
-    if (!newTeamName.trim()) return;
-    try {
-      await createTeam({ name: newTeamName, description: newTeamDescription, memberIds: selectedMembers });
-      setShowCreateTeam(false);
-      setNewTeamName(''); setNewTeamDescription(''); setSelectedMembers([]);
-      loadData();
-    } catch (error) { console.error(error); }
-  };
-
-  const toggleMember = (id: string) => setSelectedMembers(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  const handleLogout = () => { logout(); navigate('/'); };
-  const handleSaveSuggestion = async (desc: string, res: any) => {
-    try { await saveSuggestion({ competitionDescription: desc, generatedResponse: res }); setSavedRefreshKey(k => k + 1); setActiveTab('ai'); }
-    catch (e) { console.error(e); }
-  };
-
-  const navItems = [
-    { id: 'matches' as const, label: 'Teammates', count: matches.length, icon: <IconUsers /> },
-    { id: 'teams' as const,   label: 'Teams',      count: teams.length,   icon: <IconTeam /> },
-    { id: 'ai' as const,      label: 'AI Generator',                       icon: <IconAI /> },
-  ];
-
-  if (loading) {
-    return (
-      <div style={{ backgroundColor: tokens.bg, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span className="t-label">Loading…</span>
-      </div>
-    );
+  const handleSelectMatch = (match: any) => {
+    setSelectedMatch(match)
   }
 
+  const handleInviteToTeam = async (teamId: string) => {
+    if (!selectedMatch) return
+    setActionLoading(true)
+    setActionError(null)
+    try {
+      await addTeamMember(teamId, selectedMatch.userId)
+      setInviteModalOpen(false)
+      alert(`Successfully invited ${selectedMatch.name} to the team!`)
+    } catch (err: any) {
+      setActionError(err.message || "Failed to invite teammate. Are they already in the team?")
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleCreateTeamSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newTeamName.trim()) return
+    setActionLoading(true)
+    setActionError(null)
+    try {
+      const created = await createTeam(newTeamName, newTeamDesc, [selectedMatch.userId])
+      setCreateTeamModalOpen(false)
+      setNewTeamName("")
+      setNewTeamDesc("")
+      alert(`Team ${created.name} created and ${selectedMatch.name} added!`)
+    } catch (err: any) {
+      setActionError(err.message || "Failed to create team.")
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  // Filter logic
+  const filteredMatches = matches.filter((m) => {
+    // Skill filter
+    if (skillFilter.trim() && !m.skills.some((s: string) => s.toLowerCase().includes(skillFilter.toLowerCase()))) {
+      return false
+    }
+    // Experience level filter
+    if (expFilter !== "all" && m.experienceLevel?.toLowerCase() !== expFilter.toLowerCase()) {
+      return false
+    }
+    // Availability filter
+    if (availFilter !== "all" && m.availability?.toLowerCase() !== availFilter.toLowerCase()) {
+      return false
+    }
+    return true
+  })
+
+  // If user doesn't have a profile yet, let's guide them
+  const hasNoProfile = !profile
+
   return (
-    <div style={{ backgroundColor: tokens.bg, minHeight: '100vh', display: 'flex' }}>
-
-      {/* ─── Sidebar ─── */}
-      <aside
-        style={{
-          width: `${SIDEBAR_WIDTH}px`,
-          flexShrink: 0,
-          position: 'fixed',
-          top: 0,
-          bottom: 0,
-          left: 0,
-          backgroundColor: tokens.bgElevated,
-          borderRight: `1px solid ${tokens.border}`,
-          display: 'flex',
-          flexDirection: 'column',
-          zIndex: 40,
-        }}
-      >
-        {/* Logo row */}
-        <div style={{ padding: '0 0.75rem', height: '48px', display: 'flex', alignItems: 'center', borderBottom: `1px solid ${tokens.border}`, gap: '0.4rem' }}>
-          <svg width="15" height="15" style={{ color: tokens.blue, flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-          <span style={{ fontWeight: 600, fontSize: '0.8125rem', color: tokens.textPrimary, letterSpacing: '-0.01em' }}>TeamSync</span>
-        </div>
-
-        {/* Nav items */}
-        <nav style={{ flex: 1, padding: '0.375rem 0.375rem', overflowY: 'auto' }}>
-          {navItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-                padding: '0.35rem 0.45rem',
-                borderRadius: tokens.radiusSm,
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '0.75rem',
-                fontWeight: activeTab === item.id ? 500 : 400,
-                backgroundColor: activeTab === item.id ? tokens.surface : 'transparent',
-                color: activeTab === item.id ? tokens.textPrimary : tokens.textMuted,
-                transition: 'background-color 0.1s, color 0.1s',
-                marginBottom: '1px',
-                textAlign: 'left',
-                fontFamily: 'inherit',
-              }}
-              onMouseEnter={e => { if (activeTab !== item.id) { (e.currentTarget as HTMLElement).style.backgroundColor = tokens.surfaceHover; (e.currentTarget as HTMLElement).style.color = tokens.textSecondary; } }}
-              onMouseLeave={e => { if (activeTab !== item.id) { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLElement).style.color = tokens.textMuted; } }}
-            >
-              <span style={{ color: activeTab === item.id ? tokens.blue : 'inherit', flexShrink: 0 }}>{item.icon}</span>
-              <span style={{ flex: 1 }}>{item.label}</span>
-              {item.count !== undefined && (
-                <span style={{ fontSize: '0.6875rem', color: tokens.textDim, fontFamily: tokens.fontMono }}>{item.count}</span>
-              )}
-            </button>
-          ))}
-
-          {/* Divider */}
-          <div style={{ borderTop: `1px solid ${tokens.border}`, margin: '0.375rem 0' }} />
-
-          <button
-            onClick={() => navigate('/profile')}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.45rem',
-              padding: '0.35rem 0.45rem',
-              borderRadius: tokens.radiusSm,
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '0.75rem',
-              backgroundColor: 'transparent',
-              color: tokens.textMuted,
-              transition: 'background-color 0.1s, color 0.1s',
-              textAlign: 'left',
-              fontFamily: 'inherit',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = tokens.surfaceHover; (e.currentTarget as HTMLElement).style.color = tokens.textSecondary; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLElement).style.color = tokens.textMuted; }}
-          >
-            <IconProfile />
-            <span>Profile</span>
-          </button>
-        </nav>
-
-        {/* User + logout */}
-        <div style={{ borderTop: `1px solid ${tokens.border}`, padding: '0.5rem 0.75rem' }}>
-          <div style={{ marginBottom: '0.3rem' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 500, color: tokens.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {user?.name}
-            </div>
-            <div className="t-label" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {user?.email}
-            </div>
+    <div className="flex h-full min-h-0 divide-x divide-border">
+      {/* Center Pane: Matches List */}
+      <section className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto p-gutter md:p-xl gap-lg">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-md border-b border-border pb-lg">
+          <div>
+            <h1 className="font-headline text-headline-sm md:text-[28px] font-bold text-on-surface">Teammate Finder</h1>
+            <p className="text-body-base text-text-dim mt-xs">Cosine-similarity recommended developers matching your profile</p>
           </div>
-          <button
-            onClick={handleLogout}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.3rem',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: tokens.textMuted,
-              fontSize: '0.6875rem',
-              padding: 0,
-              transition: 'color 0.1s',
-              fontFamily: 'inherit',
-            }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = tokens.red}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = tokens.textMuted}
-          >
-            <IconSignOut />
-            Sign out
-          </button>
+          <div className="flex flex-wrap gap-sm">
+            <input
+              type="text"
+              placeholder="Filter by skill..."
+              value={skillFilter}
+              onChange={(e) => setSkillFilter(e.target.value)}
+              className="bg-surface border border-border rounded px-sm h-[32px] text-body-base text-on-surface focus:outline-none focus:border-primary placeholder:text-text-dim w-[140px]"
+            />
+            <select
+              value={expFilter}
+              onChange={(e) => setExpFilter(e.target.value)}
+              className="bg-surface border border-border rounded px-sm h-[32px] text-[12px] font-mono text-on-surface focus:outline-none focus:border-primary"
+            >
+              <option value="all">All Exp</option>
+              <option value="junior">Junior</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="senior">Senior</option>
+            </select>
+            <select
+              value={availFilter}
+              onChange={(e) => setAvailFilter(e.target.value)}
+              className="bg-surface border border-border rounded px-sm h-[32px] text-[12px] font-mono text-on-surface focus:outline-none focus:border-primary"
+            >
+              <option value="all">All Availability</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
         </div>
-      </aside>
 
-      {/* ─── Main Content ─── */}
-      <main style={{ marginLeft: `${SIDEBAR_WIDTH}px`, flex: 1, minWidth: 0 }}>
-        {/* Top bar */}
-        <header
-          style={{
-            position: 'sticky',
-            top: 0,
-            zIndex: 30,
-            backgroundColor: tokens.bgElevated,
-            borderBottom: `1px solid ${tokens.border}`,
-            height: '48px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 1.25rem',
-          }}
-        >
-          <span className="t-heading" style={{ fontSize: '0.8125rem' }}>
-            {activeTab === 'matches' && `Teammate matches  ·  ${matches.length} results`}
-            {activeTab === 'teams' && `Your teams  ·  ${teams.length} total`}
-            {activeTab === 'ai' && 'AI team strategy generator'}
-          </span>
-          {(activeTab === 'matches' || activeTab === 'teams') && (
-            <button className="btn-primary" onClick={() => setShowCreateTeam(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-              <IconPlus /> New team
-            </button>
-          )}
-        </header>
-
-        {/* Page content */}
-        <div style={{ padding: '1rem 1.25rem' }}>
-
-          {/* ── Matches tab ── */}
-          {activeTab === 'matches' && (
+        {hasNoProfile && (
+          <div className="bg-primary/5 border border-primary/20 p-lg rounded flex flex-col md:flex-row items-center justify-between gap-md">
             <div>
-              {matches.length === 0 ? (
-                <EmptyState icon={<IconUsers />} title="No matches yet" desc="Complete your profile to receive skill-based teammate recommendations." action={<button className="btn-primary" onClick={() => navigate('/profile')}>Complete profile</button>} />
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '0.5rem' }}>
-                  {matches.map(match => (
-                    <MatchCard
-                      key={match.userId}
-                      match={match}
-                      onInvite={() => { setSelectedMembers([match.userId]); setShowCreateTeam(true); }}
-                    />
-                  ))}
-                </div>
-              )}
+              <h3 className="font-bold text-primary flex items-center gap-xs">
+                <span className="material-symbols-outlined text-[18px]">info</span>
+                Create Your Profile First
+              </h3>
+              <p className="text-body-base text-text-muted mt-xs">
+                You need a profile containing skills, interests, and availability so the AI matching engine can compute recommendations.
+              </p>
             </div>
-          )}
+            <Button variant="primary" onClick={() => window.location.href = "/settings"}>
+              Setup Profile
+            </Button>
+          </div>
+        )}
 
-          {/* ── Teams tab ── */}
-          {activeTab === 'teams' && (
-            <div>
-              {teams.length === 0 ? (
-                <EmptyState icon={<IconTeam />} title="No teams yet" desc="Create a team or get invited by a teammate." />
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '0.5rem' }}>
-                  {teams.map(team => (
-                    <div
-                      key={team.id}
-                      className="card"
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => navigate(`/team/${team.id}`)}
-                    >
-                      <div style={{ fontWeight: 500, fontSize: '0.75rem', color: tokens.textSecondary, marginBottom: '0.2rem' }}>{team.name}</div>
-                      {team.description && (
-                        <p className="t-body" style={{ fontSize: '0.72rem', marginBottom: '0.4rem', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                          {team.description}
+        {matchesLoading ? (
+          <div className="flex flex-col items-center justify-center py-[100px] gap-sm">
+            <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            <p className="font-mono text-[12px] text-text-dim">Matching developer profiles...</p>
+          </div>
+        ) : filteredMatches.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-[100px] border border-dashed border-border rounded">
+            <span className="material-symbols-outlined text-[36px] text-text-dim mb-sm animate-bounce">search_off</span>
+            <h3 className="text-title-md font-bold text-on-surface">No developers found</h3>
+            <p className="text-body-base text-text-dim mt-xs text-center max-w-[340px]">
+              Try adjusting your filters or update your own skills list in Settings so the engine finds matches.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
+            {filteredMatches.map((match) => {
+              const isSelected = selectedMatch?.userId === match.userId
+              return (
+                <div
+                  key={match.userId}
+                  onClick={() => handleSelectMatch(match)}
+                  className={`border rounded p-lg flex flex-col gap-sm cursor-pointer transition-all duration-200 relative overflow-hidden group ${
+                    isSelected
+                      ? "bg-surface-hover border-primary shadow-lg shadow-primary/5"
+                      : "bg-surface border-border hover:border-border-hover"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-md">
+                    <div className="flex items-center gap-md">
+                      <div className="w-10 h-10 rounded bg-surface-container-high border border-border flex items-center justify-center text-on-surface font-headline font-bold text-[14px] uppercase shrink-0">
+                        {match.name.substring(0, 2)}
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-headline text-[14px] font-bold text-on-surface truncate group-hover:text-primary transition-colors">
+                          {match.name}
+                        </h4>
+                        <p className="font-mono text-[11px] text-text-dim capitalize">
+                          {match.experienceLevel || "Developer"}
                         </p>
-                      )}
-                      <div style={{ display: 'flex', gap: '0.625rem' }}>
-                        <span className="t-label">{team.members.length} members</span>
-                        <span className="t-label">{team._count.messages} messages</span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                    {match.matchScore !== null && (
+                      <span className="font-mono text-[11px] font-bold text-primary bg-primary/10 border border-primary/20 px-sm rounded shrink-0">
+                        {match.matchScore}% Match
+                      </span>
+                    )}
+                  </div>
 
-          {/* ── AI tab ── */}
-          {activeTab === 'ai' && (
-            <div style={{ maxWidth: '640px' }}>
-              <AITeamGenerator onSaveSuggestion={handleSaveSuggestion} />
-              <div style={{ marginTop: '1.25rem' }}>
-                <SavedSuggestions refreshKey={savedRefreshKey} />
-              </div>
-            </div>
-          )}
-        </div>
-      </main>
+                  <p className="text-body-base text-text-muted line-clamp-2 leading-relaxed">
+                    {match.bio || "No bio summary provided."}
+                  </p>
 
-      {/* ─── Create Team Modal ─── */}
-      {showCreateTeam && (
-        <div
-          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: '1rem' }}
-          onClick={e => { if (e.target === e.currentTarget) { setShowCreateTeam(false); setNewTeamName(''); setNewTeamDescription(''); setSelectedMembers([]); } }}
-        >
-          <div className="card" style={{ width: '100%', maxWidth: '440px', maxHeight: '85vh', overflowY: 'auto', padding: '1.25rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <span className="t-heading">Create team</span>
-              <button onClick={() => setShowCreateTeam(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: tokens.textMuted, display: 'flex' }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = tokens.textSecondary}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = tokens.textMuted}
-              ><IconClose /></button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem' }}>
-              <div>
-                <label className="t-label" style={{ display: 'block', marginBottom: '0.25rem' }}>Team name *</label>
-                <input type="text" value={newTeamName} onChange={e => setNewTeamName(e.target.value)} className="input" placeholder="e.g. Alpha Squad" />
-              </div>
-              <div>
-                <label className="t-label" style={{ display: 'block', marginBottom: '0.25rem' }}>Description</label>
-                <textarea value={newTeamDescription} onChange={e => setNewTeamDescription(e.target.value)} rows={2} className="input" placeholder="What competition is this team for?" style={{ resize: 'vertical' }} />
-              </div>
-              {matches.length > 0 && (
-                <div>
-                  <label className="t-label" style={{ display: 'block', marginBottom: '0.25rem' }}>Invite members (optional)</label>
-                  <div style={{ maxHeight: '140px', overflowY: 'auto', border: `1px solid ${tokens.border}`, borderRadius: tokens.radius, padding: '0.25rem' }}>
-                    {matches.map(m => (
-                      <label key={m.userId} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.25rem 0.2rem', cursor: 'pointer', borderRadius: tokens.radiusSm }}
-                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = tokens.surfaceHover}
-                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'}
+                  <div className="flex flex-wrap gap-xs mt-auto pt-sm">
+                    {match.skills.slice(0, 4).map((skill: string) => (
+                      <span
+                        key={skill}
+                        className="font-mono text-[10px] bg-surface-container-high border border-border text-on-surface px-sm py-[2px] rounded"
                       >
-                        <input type="checkbox" checked={selectedMembers.includes(m.userId)} onChange={() => toggleMember(m.userId)} style={{ cursor: 'pointer' }} />
-                        <span style={{ fontSize: '0.75rem', color: tokens.textSecondary, flex: 1 }}>{m.name}</span>
-                        <span className="t-label">{m.matchScore}%</span>
-                      </label>
+                        {skill}
+                      </span>
                     ))}
+                    {match.skills.length > 4 && (
+                      <span className="font-mono text-[10px] text-text-dim px-xs py-[2px]">
+                        +{match.skills.length - 4} more
+                      </span>
+                    )}
                   </div>
                 </div>
-              )}
+              )
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Right Pane: Selected Match Profile Details Sidebar */}
+      <aside className="w-[340px] shrink-0 bg-surface flex flex-col h-full overflow-y-auto hidden lg:flex">
+        {selectedMatch ? (
+          <div className="p-xl flex flex-col gap-xl">
+            <div className="flex items-center gap-md border-b border-border pb-lg">
+              <div className="w-[48px] h-[48px] rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-headline font-bold text-[18px] uppercase">
+                {selectedMatch.name.substring(0, 2)}
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-headline text-title-md font-bold text-on-surface truncate">{selectedMatch.name}</h3>
+                <p className="text-[12px] text-text-muted truncate">{selectedMatch.email}</p>
+              </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.375rem' }}>
-              <button onClick={handleCreateTeam} disabled={!newTeamName.trim()} className="btn-primary" style={{ flex: 1, justifyContent: 'center' }}>Create team</button>
-              <button onClick={() => { setShowCreateTeam(false); setNewTeamName(''); setNewTeamDescription(''); setSelectedMembers([]); }} className="btn-secondary" style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
+            <div className="flex gap-sm w-full">
+              <Button
+                variant="primary"
+                onClick={() => setInviteModalOpen(true)}
+                className="flex-1 flex items-center justify-center gap-xs font-bold"
+              >
+                <span className="material-symbols-outlined text-[16px]">group_add</span>
+                Invite Teammate
+              </Button>
+            </div>
+
+            {selectedMatch.matchScore && (
+              <div className="bg-surface-container-high/40 border border-border p-md rounded flex items-center gap-md">
+                <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-primary flex items-center justify-center shrink-0">
+                  <span className="font-mono text-[11px] font-bold text-on-surface">{selectedMatch.matchScore}%</span>
+                </div>
+                <div>
+                  <h4 className="font-headline text-[13px] font-bold text-on-surface">Score Breakdown</h4>
+                  <p className="text-[11px] text-text-muted mt-xs">High affinity match on technologies and hackathon goals.</p>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <h4 className="font-mono text-[10px] text-text-dim uppercase tracking-wider mb-sm">About Developer</h4>
+              <p className="text-body-base text-text-muted leading-relaxed">
+                {selectedMatch.bio || "This developer hasn't set up an about bio yet."}
+              </p>
+            </div>
+
+            {selectedMatch.summary && (
+              <div className="bg-surface-container-low border border-border rounded p-md">
+                <h4 className="font-headline text-[12px] font-bold text-primary flex items-center gap-xs mb-xs">
+                  <span className="material-symbols-outlined text-[16px]">psychology</span>
+                  AI Match Summary
+                </h4>
+                <p className="text-[12px] text-text-muted leading-relaxed italic">
+                  "{selectedMatch.summary}"
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-md">
+              <div>
+                <h4 className="font-mono text-[10px] text-text-dim uppercase tracking-wider mb-xs">Technical Skills</h4>
+                <div className="flex flex-wrap gap-xs">
+                  {selectedMatch.skills.map((skill: string) => (
+                    <span key={skill} className="font-mono text-[10px] bg-background border border-border text-on-surface px-sm py-[2px] rounded">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-mono text-[10px] text-text-dim uppercase tracking-wider mb-xs">Interests</h4>
+                <div className="flex flex-wrap gap-xs">
+                  {selectedMatch.interests?.map((interest: string) => (
+                    <span key={interest} className="font-mono text-[10px] bg-background border border-border text-text-muted px-sm py-[2px] rounded">
+                      {interest}
+                    </span>
+                  )) || <span className="text-[11px] text-text-dim">No interests listed</span>}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-mono text-[10px] text-text-dim uppercase tracking-wider mb-xs">Competitions</h4>
+                <div className="flex flex-wrap gap-xs">
+                  {selectedMatch.competitions?.map((comp: string) => (
+                    <span key={comp} className="font-mono text-[10px] bg-background border border-border text-text-muted px-sm py-[2px] rounded">
+                      {comp}
+                    </span>
+                  )) || <span className="text-[11px] text-text-dim">No competitions listed</span>}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-mono text-[10px] text-text-dim uppercase tracking-wider mb-xs">Availability</h4>
+                <span className="font-mono text-[11px] bg-tertiary/10 border border-tertiary/20 text-tertiary px-sm py-[2px] rounded capitalize">
+                  {selectedMatch.availability || "Not Specified"}
+                </span>
+              </div>
             </div>
           </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center p-xl h-[400px] text-center">
+            <span className="material-symbols-outlined text-[36px] text-text-dim mb-sm">person</span>
+            <p className="text-body-base text-text-dim">Select a developer from the matches list to view full details.</p>
+          </div>
+        )}
+      </aside>
+
+      {/* Invite Member to Team Modal */}
+      <Dialog isOpen={inviteModalOpen} onClose={() => setInviteModalOpen(false)} title={`Invite ${selectedMatch?.name}`}>
+        <div className="flex flex-col gap-md">
+          {actionError && (
+            <div className="p-sm bg-error/10 border border-error/20 rounded text-[11px] text-error font-mono flex items-center gap-xs">
+              <span className="material-symbols-outlined text-[14px]">error</span>
+              <span>{actionError}</span>
+            </div>
+          )}
+
+          {teams.length === 0 ? (
+            <div className="text-center py-md flex flex-col gap-sm items-center">
+              <p className="text-body-base text-text-muted">You haven't created any teams yet. Create a team first to invite developers.</p>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setInviteModalOpen(false)
+                  setCreateTeamModalOpen(true)
+                }}
+              >
+                Create Team & Add Teammate
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-sm">
+              <p className="text-[12px] text-text-muted">Select one of your teams to add {selectedMatch?.name} to:</p>
+              <div className="max-h-[200px] overflow-y-auto border border-border rounded divide-y divide-border">
+                {teams.map((team) => (
+                  <div key={team.id} className="p-sm flex items-center justify-between hover:bg-surface-hover transition-colors">
+                    <div>
+                      <h4 className="text-[12px] font-bold text-on-surface">{team.name}</h4>
+                      <p className="text-[10px] text-text-muted font-mono">{team.members?.length || 0} Members</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      isLoading={actionLoading}
+                      onClick={() => handleInviteToTeam(team.id)}
+                    >
+                      Invite
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-      )}
-    </div>
-  );
-};
+      </Dialog>
 
-// ─── Sub-components ──────────────────────────────────────────────
-function EmptyState({ icon, title, desc, action }: { icon: React.ReactNode; title: string; desc: string; action?: React.ReactNode }) {
-  return (
-    <div className="card" style={{ textAlign: 'center', padding: '2rem 1.25rem' }}>
-      <div style={{ color: tokens.textDim, display: 'flex', justifyContent: 'center', marginBottom: '0.625rem' }}>{icon}</div>
-      <div className="t-heading" style={{ fontSize: '0.8125rem', marginBottom: '0.25rem' }}>{title}</div>
-      <p className="t-body" style={{ fontSize: '0.75rem', marginBottom: action ? '0.75rem' : '0' }}>{desc}</p>
-      {action}
+      {/* Create Team Modal */}
+      <Dialog isOpen={createTeamModalOpen} onClose={() => setCreateTeamModalOpen(false)} title="Create New Team">
+        <form onSubmit={handleCreateTeamSubmit} className="flex flex-col gap-md">
+          {actionError && (
+            <div className="p-sm bg-error/10 border border-error/20 rounded text-[11px] text-error font-mono flex items-center gap-xs">
+              <span className="material-symbols-outlined text-[14px]">error</span>
+              <span>{actionError}</span>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-xs">
+            <label className="font-mono text-[10px] text-text-dim uppercase tracking-wider">Team Name</label>
+            <Input
+              type="text"
+              placeholder="e.g. Hackathon Alpha"
+              value={newTeamName}
+              onChange={(e) => setNewTeamName(e.target.value)}
+              required
+              disabled={actionLoading}
+            />
+          </div>
+
+          <div className="flex flex-col gap-xs">
+            <label className="font-mono text-[10px] text-text-dim uppercase tracking-wider">Description (Optional)</label>
+            <textarea
+              placeholder="e.g. AI-powered matching interface hack"
+              value={newTeamDesc}
+              onChange={(e) => setNewTeamDesc(e.target.value)}
+              disabled={actionLoading}
+              rows={2}
+              className="w-full bg-surface-container-lowest border border-border rounded px-sm py-xs text-on-surface font-mono text-[12px] placeholder:text-text-dim focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-200 resize-none"
+            />
+          </div>
+
+          <p className="text-[11px] text-text-dim italic mt-xs">
+            Note: Creating this team will automatically invite and add {selectedMatch?.name}.
+          </p>
+
+          <Button type="submit" variant="primary" className="w-full mt-sm" isLoading={actionLoading}>
+            Create Team & Invite
+          </Button>
+        </form>
+      </Dialog>
     </div>
-  );
+  )
 }
-
-function MatchCard({ match, onInvite }: { match: Match; onInvite: () => void }) {
-  return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <div style={{ fontWeight: 500, fontSize: '0.75rem', color: tokens.textSecondary }}>{match.name}</div>
-          <div className="t-label">{match.experienceLevel}</div>
-        </div>
-        <span style={{ fontSize: '0.6875rem', fontFamily: tokens.fontMono, color: tokens.green, background: tokens.greenBg, border: `1px solid ${tokens.greenBorder}`, borderRadius: tokens.radiusSm, padding: '0.1rem 0.35rem' }}>
-          {match.matchScore}%
-        </span>
-      </div>
-
-      {/* Summary */}
-      {match.summary && (
-        <p className="t-body" style={{ fontSize: '0.72rem', borderTop: `1px solid ${tokens.border}`, paddingTop: '0.4rem', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', margin: 0 }}>
-          {match.summary}
-        </p>
-      )}
-
-      {/* Skills */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
-        {match.skills.slice(0, 4).map((skill, i) => <span key={i} className="tag">{skill}</span>)}
-        {match.skills.length > 4 && <span className="t-label">+{match.skills.length - 4}</span>}
-      </div>
-
-      {/* Action */}
-      <button onClick={onInvite} className="btn-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: '0.15rem' }}>
-        Invite to team
-      </button>
-    </div>
-  );
-}
-
-export default Dashboard;

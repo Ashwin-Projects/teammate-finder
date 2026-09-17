@@ -1,189 +1,236 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { getProfile, updateProfile, generateProfileSummary } from '../utils/api';
-import { useUserStore } from '../store/useUserStore';
-import { tokens } from '../tokens';
+import React, { useEffect } from "react"
+import { useNavigate } from "react-router-dom"
+import { useStore } from "../store/useStore"
+import { Button } from "../components/ui/button"
+import { Card } from "../components/ui/card"
 
-const SKILLS_OPTIONS = [
-  'JavaScript', 'Python', 'Java', 'C++', 'React', 'Node.js', 'Machine Learning',
-  'Data Science', 'UI/UX Design', 'Problem Solving', 'Algorithms', 'Web Development',
-  'Mobile Development', 'Cloud Computing', 'DevOps', 'Cybersecurity'
-];
-const COMPETITION_OPTIONS = [
-  'Hackathons', 'Coding Competitions', 'Design Challenges', 'Business Competitions',
-  'Data Science Competitions', 'CTF', 'Game Jams', 'Robotics', 'AI Challenges'
-];
-
-const Profile: React.FC = () => {
-  const navigate = useNavigate();
-  const { isAuthenticated } = useUserStore();
-  const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [message, setMessage] = useState('');
-  const [isError, setIsError] = useState(false);
-  const [formData, setFormData] = useState({
-    bio: '', skills: [] as string[], interests: [] as string[], competitions: [] as string[],
-    availability: '', experienceLevel: 'intermediate', summary: ''
-  });
+export const Profile: React.FC = () => {
+  const navigate = useNavigate()
+  const { user, profile, fetchProfile, profileLoading, generateSummary } = useStore()
 
   useEffect(() => {
-    if (!isAuthenticated) { navigate('/login'); return; }
-    loadProfile();
-  }, [isAuthenticated, navigate]);
-
-  const loadProfile = async () => {
-    try {
-      const response = await getProfile();
-      if (response.profile) {
-        setFormData({
-          bio: response.profile.bio || '',
-          skills: response.profile.skills || [],
-          interests: response.profile.interests || [],
-          competitions: response.profile.competitions || [],
-          availability: response.profile.availability || '',
-          experienceLevel: response.profile.experienceLevel || 'intermediate',
-          summary: response.profile.summary || ''
-        });
-      }
-    } catch (error: any) {
-      if (error.response?.status !== 404) console.error('Error loading profile:', error);
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-  const toggleSkill = (s: string) => setFormData({ ...formData, skills: formData.skills.includes(s) ? formData.skills.filter(x => x !== s) : [...formData.skills, s] });
-  const toggleComp  = (c: string) => setFormData({ ...formData, competitions: formData.competitions.includes(c) ? formData.competitions.filter(x => x !== c) : [...formData.competitions, c] });
+    fetchProfile().catch(() => {
+      console.log("Failed to fetch profile. User probably hasn't created one yet.")
+    })
+  }, [fetchProfile])
 
   const handleGenerateSummary = async () => {
-    setGenerating(true);
     try {
-      const resp = await generateProfileSummary();
-      setFormData(prev => ({ ...prev, summary: resp.summary }));
-      setIsError(false); setMessage('Summary generated.'); setTimeout(() => setMessage(''), 3000);
-    } catch {
-      setIsError(true); setMessage('Failed to generate summary.'); setTimeout(() => setMessage(''), 3000);
-    } finally { setGenerating(false); }
-  };
+      const summary = await generateSummary()
+      alert(`AI Summary Generated:\n"${summary}"`)
+    } catch (err: any) {
+      alert(err.message || "Failed to generate AI summary. Make sure OpenAI key is set up in backend.")
+    }
+  }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true); setMessage('');
-    try {
-      await updateProfile(formData);
-      setIsError(false); setMessage('Profile saved successfully.');
-      setTimeout(() => navigate('/dashboard'), 1200);
-    } catch {
-      setIsError(true); setMessage('Failed to save profile.');
-    } finally { setLoading(false); }
-  };
+  if (profileLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full py-[100px] gap-sm">
+        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="font-mono text-[12px] text-text-dim">Retrieving developer profile...</p>
+      </div>
+    )
+  }
 
-  return (
-    <div style={{ backgroundColor: tokens.bg, minHeight: '100vh' }}>
-      {/* Navbar */}
-      <nav style={{ position: 'sticky', top: 0, zIndex: 30, borderBottom: `1px solid ${tokens.border}`, backgroundColor: tokens.bgElevated }}>
-        <div className="content-container" style={{ height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button onClick={() => navigate('/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'none', border: 'none', cursor: 'pointer' }}>
-            <svg width="16" height="16" style={{ color: tokens.blue }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            <span style={{ fontWeight: 600, fontSize: '0.8125rem', color: tokens.textPrimary, letterSpacing: '-0.01em' }}>TeamSync</span>
-          </button>
-          <button onClick={() => navigate('/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'none', border: 'none', cursor: 'pointer', color: tokens.textMuted, fontSize: '0.75rem', transition: 'color 0.1s', fontFamily: 'inherit' }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = tokens.textSecondary}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = tokens.textMuted}
-          >
-            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-            </svg>
-            Dashboard
-          </button>
+  // Handle empty profile state
+  if (!profile && user) {
+    return (
+      <div className="max-w-[500px] mx-auto px-gutter py-[80px] text-center flex flex-col gap-lg items-center">
+        <div className="w-16 h-16 rounded-full bg-surface-container border border-border flex items-center justify-center text-text-muted">
+          <span className="material-symbols-outlined text-[36px]">person_off</span>
         </div>
-      </nav>
-
-      {/* Content */}
-      <div className="content-container" style={{ paddingTop: '1.25rem', paddingBottom: '2.5rem', maxWidth: '560px' }}>
-        <h1 className="t-heading" style={{ fontSize: '0.9375rem', marginBottom: '1rem' }}>Profile settings</h1>
-
-        {message && (
-          <div style={{ padding: '0.4rem 0.625rem', borderRadius: tokens.radius, fontSize: '0.72rem', marginBottom: '1rem', background: isError ? tokens.redBg : tokens.greenBg, border: `1px solid ${isError ? tokens.redBorder : tokens.greenBorder}`, color: isError ? tokens.red : tokens.green }}>
-            {message}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {/* Bio */}
-          <FormSection label="Bio">
-            <textarea name="bio" value={formData.bio} onChange={handleChange} rows={3} className="input" placeholder="Briefly describe your background, interests, and goals." style={{ resize: 'vertical' }} />
-          </FormSection>
-
-          {/* Skills */}
-          <FormSection label="Skills">
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
-              {SKILLS_OPTIONS.map(s => (
-                <button key={s} type="button" onClick={() => toggleSkill(s)} className={formData.skills.includes(s) ? 'tag tag-active' : 'tag'} style={{ cursor: 'pointer', transition: 'border-color 0.1s, color 0.1s' }}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </FormSection>
-
-          {/* Competition types */}
-          <FormSection label="Competition types">
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
-              {COMPETITION_OPTIONS.map(c => (
-                <button key={c} type="button" onClick={() => toggleComp(c)} className={formData.competitions.includes(c) ? 'tag tag-active' : 'tag'} style={{ cursor: 'pointer', transition: 'border-color 0.1s, color 0.1s' }}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          </FormSection>
-
-          {/* Experience */}
-          <FormSection label="Experience level">
-            <select name="experienceLevel" value={formData.experienceLevel} onChange={handleChange} className="input" style={{ width: 'auto', minWidth: '150px' }}>
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
-              <option value="expert">Expert</option>
-            </select>
-          </FormSection>
-
-          {/* Availability */}
-          <FormSection label="Availability">
-            <input type="text" name="availability" value={formData.availability} onChange={handleChange} className="input" placeholder="e.g. Weekends, Evenings (10–20 hrs/week)" />
-          </FormSection>
-
-          {/* AI Summary */}
-          <FormSection label="AI-generated summary" labelRight={
-            <button type="button" onClick={handleGenerateSummary} disabled={generating} className="btn-secondary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.6875rem' }}>
-              {generating ? 'Generating…' : 'Generate'}
-            </button>
-          }>
-            <textarea name="summary" value={formData.summary} onChange={handleChange} rows={3} className="input" placeholder="AI will summarize your profile skills and goals for discovery." style={{ resize: 'vertical' }} />
-          </FormSection>
-
-          <div style={{ borderTop: `1px solid ${tokens.border}`, paddingTop: '0.75rem' }}>
-            <button type="submit" disabled={loading} className="btn-primary">
-              {loading ? 'Saving…' : 'Save profile'}
-            </button>
-          </div>
-        </form>
+        <div>
+          <h1 className="font-headline text-[24px] font-bold text-on-surface">No profile setup yet</h1>
+          <p className="text-body-base text-text-dim mt-sm leading-relaxed">
+            Welcome to DevMatch AI, {user.name}! To connect with other hackathon developers, you need to create your skills profile first.
+          </p>
+        </div>
+        <Button variant="primary" size="lg" onClick={() => navigate("/settings")}>
+          Create My Profile
+        </Button>
       </div>
-    </div>
-  );
-};
+    )
+  }
 
-function FormSection({ label, labelRight, children }: { label: string; labelRight?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
-        <label className="t-label">{label}</label>
-        {labelRight}
+    <div className="w-full max-w-container-max mx-auto p-gutter md:p-xl space-y-xl">
+      {/* Profile Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-border pb-lg gap-md">
+        <div>
+          <h1 className="font-headline text-[32px] font-bold text-on-surface leading-tight">
+            {user?.name}
+          </h1>
+          <p className="text-body-base text-text-dim mt-xs capitalize">
+            {profile.experienceLevel} Developer | {profile.availability} for Hackathons
+          </p>
+        </div>
+        <div className="flex gap-sm">
+          <Button
+            variant="outline"
+            className="flex items-center gap-xs"
+            onClick={() => navigate("/settings")}
+          >
+            <span className="material-symbols-outlined text-[16px]">edit</span>
+            Edit Profile
+          </Button>
+          <Button
+            variant="primary"
+            className="flex items-center gap-xs font-bold"
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href)
+              alert("Profile link copied to clipboard!")
+            }}
+          >
+            <span className="material-symbols-outlined text-[16px]">share</span>
+            Share
+          </Button>
+        </div>
       </div>
-      {children}
-    </div>
-  );
-}
 
-export default Profile;
+      {/* Bento Grid Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-xl">
+        {/* Left Column: Main Profile Information */}
+        <div className="md:col-span-8 space-y-xl">
+          {/* Bio Card */}
+          <Card hoverEffect={true} className="p-lg relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            <div className="flex flex-col sm:flex-row gap-lg items-start relative z-10">
+              <div className="w-20 h-20 rounded bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-headline font-bold text-[24px] uppercase shrink-0">
+                {user?.name.substring(0, 2)}
+              </div>
+              <div className="flex-1">
+                <h3 className="font-headline text-title-md font-bold text-on-surface mb-sm">About Me</h3>
+                <p className="text-body-base text-text-muted leading-relaxed">
+                  {profile.bio || "Write a detailed bio in Settings to let teams know about your skills and interests!"}
+                </p>
+                <div className="mt-lg flex flex-wrap gap-xs">
+                  <span className="font-mono text-[10px] px-sm py-[2px] bg-surface-container border border-border rounded text-on-surface">
+                    Level: <span className="capitalize">{profile.experienceLevel}</span>
+                  </span>
+                  <span className="font-mono text-[10px] px-sm py-[2px] bg-surface-container border border-border rounded text-on-surface flex items-center gap-xs">
+                    <span className="w-2 h-2 rounded-full bg-tertiary"></span>
+                    Available: <span className="capitalize">{profile.availability}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* AI Generated summary card */}
+          <Card hoverEffect={true} className="p-lg bg-surface-container-low/50">
+            <div className="flex justify-between items-start mb-md">
+              <h3 className="font-headline text-title-md font-bold text-on-surface flex items-center gap-sm">
+                <span className="material-symbols-outlined text-[20px] text-primary">psychology</span>
+                AI Profile Summary
+              </h3>
+              <Button variant="outline" size="sm" onClick={handleGenerateSummary}>
+                Regenerate
+              </Button>
+            </div>
+            <p className="text-body-base text-text-muted leading-relaxed italic">
+              {profile.summary ? `"${profile.summary}"` : "Click 'Regenerate' to let the AI build a concise matching report based on your skills and hackathon history."}
+            </p>
+          </Card>
+
+          {/* Technical Stack */}
+          <Card hoverEffect={true} className="p-lg">
+            <h3 className="font-headline text-title-md font-bold text-on-surface mb-md flex items-center gap-sm">
+              <span className="material-symbols-outlined text-[20px] text-text-dim">code</span>
+              Technical Stack
+            </h3>
+            <div className="space-y-md">
+              <div>
+                <h4 className="font-mono text-[10px] text-text-dim uppercase tracking-wider mb-xs">Languages & Frameworks</h4>
+                <div className="flex flex-wrap gap-sm">
+                  {profile.skills && profile.skills.length > 0 ? (
+                    profile.skills.map((skill: string) => (
+                      <span key={skill} className="font-mono text-[11px] h-[22px] px-sm bg-surface-hover border border-border rounded text-on-surface flex items-center">
+                        {skill}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[12px] text-text-dim italic">No skills listed yet</span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-mono text-[10px] text-text-dim uppercase tracking-wider mb-xs">Areas of Interest</h4>
+                <div className="flex flex-wrap gap-sm">
+                  {profile.interests && profile.interests.length > 0 ? (
+                    profile.interests.map((interest: string) => (
+                      <span key={interest} className="font-mono text-[11px] h-[22px] px-sm bg-surface-hover border border-border rounded text-text-muted flex items-center">
+                        {interest}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[12px] text-text-dim italic">No interests listed yet</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Hackathon History */}
+          <Card hoverEffect={true} className="p-lg">
+            <h3 className="font-headline text-title-md font-bold text-on-surface mb-md flex items-center gap-sm">
+              <span className="material-symbols-outlined text-[20px] text-text-dim">emoji_events</span>
+              Hackathon History
+            </h3>
+            <div className="space-y-md">
+              {profile.competitions && profile.competitions.length > 0 ? (
+                profile.competitions.map((comp: string, i: number) => (
+                  <div key={comp} className="group border border-border rounded p-md hover:bg-surface-hover transition-colors relative">
+                    <div className="flex justify-between items-start mb-xs">
+                      <h4 className="font-headline text-[14px] font-bold text-on-surface group-hover:text-primary transition-colors">
+                        {comp}
+                      </h4>
+                      <span className="font-mono text-[10px] text-tertiary bg-tertiary/10 border border-tertiary/20 px-xs py-[2px] rounded">
+                        {i === 0 ? "Podium Finish" : "Participant"}
+                      </span>
+                    </div>
+                    <p className="text-body-base text-text-dim">Matched and collaborated with developers globally.</p>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-md border border-dashed border-border rounded text-text-dim text-[12px] italic">
+                  No hackathons listed yet.
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* Right Column: Badges and Teams */}
+        <div className="md:col-span-4 space-y-xl">
+          {/* Verified Wins Badge */}
+          <Card hoverEffect={true} className="p-lg flex flex-col items-center text-center">
+            <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mb-md">
+              <span className="material-symbols-outlined text-[32px] text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
+                verified
+              </span>
+            </div>
+            <h3 className="font-headline text-title-md font-bold text-on-surface">Verified Profile</h3>
+            <p className="text-body-base text-text-dim mt-xs">
+              This developer profile is verified and active on the DevMatch matching engine.
+            </p>
+          </Card>
+
+          {/* Availability Widget */}
+          <Card hoverEffect={true} className="p-lg">
+            <h3 className="font-mono text-[10px] text-text-dim uppercase tracking-wider mb-md">Matchmaking Status</h3>
+            <div className="flex items-center gap-md border border-border rounded p-sm bg-surface-container-low">
+              <div className="w-10 h-10 rounded bg-tertiary/10 border border-tertiary/30 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-tertiary text-[20px]">check_circle</span>
+              </div>
+              <div>
+                <h4 className="font-headline text-[13px] font-bold text-on-surface leading-tight">Match Pool Active</h4>
+                <p className="text-[11px] text-text-dim mt-[2px]">Currently visible to matching algorithm suggestion feeds.</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}
