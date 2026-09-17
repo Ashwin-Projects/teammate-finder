@@ -1,92 +1,91 @@
-# Competition Teammate Finder
+# Competition Teammate Finder (DevMatch AI)
 
-A full-stack platform that helps participants form **complementary, credible, and available** teams for hackathons and other competitions — through explainable, team-aware recommendations rather than plain similarity matching.
+A full-stack competition team-formation platform designed to help hackathon and competition participants find **complementary, credible, and available** teammates through explainable, team-aware recommendations.
 
 > Find people who *complete* your team, not people who look like you.
 
 ---
 
-## Status
+## Current Status
 
-This repository is being refined from an initial full-stack prototype into a focused, production-oriented MVP. See [`docs/product.md`](docs/product.md) for the full product, architecture, safety, and execution plan. This README covers what's needed to run and understand the project day-to-day.
+This repository is currently an **initial full-stack prototype being cleaned and prepared for the production-oriented MVP**.
+
+* **Phase 0 (Repository Audit & Cleanup)**: COMPLETED.
+* **Handoff & Project Context**: See [`CLAUDE.md`](CLAUDE.md) for full project state, technical debt, and execution rules.
+* **Product Specification**: See `Competition_Teammate_Finder_Revised_Master_Plan.pdf` for the product roadmap, data models, and safety requirements.
 
 ---
 
 ## Tech Stack
 
+### Currently Implemented
 | Layer | Technology |
 |---|---|
-| Frontend | React + TypeScript + Tailwind + Zustand + React Router |
-| Backend | Node.js + Express |
-| Database | PostgreSQL + Prisma ORM |
-| Auth | JWT + bcrypt (+ email verification, password reset) |
-| Realtime | Socket.io (Redis adapter planned for multi-instance scaling) |
-| AI | OpenAI — profile/team summarization, cached and fallback-safe |
-| Matching | Deterministic, explainable weighted scoring with a cold-start mode |
+| Frontend | React 19 + TypeScript 6 + Vite 8 + Tailwind CSS v4 + Zustand 5 + Framer Motion |
+| Backend | Node.js + Express 4 |
+| Database | PostgreSQL + Prisma ORM 5 |
+| Auth | JWT (`jsonwebtoken`) + Password Hashing (`bcryptjs`) |
+| Realtime | Socket.io 4 (single-instance server) |
+| AI | OpenAI (`gpt-3.5-turbo`) + OpenRouter (`meta-llama/llama-3.1-8b-instruct:free`) |
+| Matching | Cosine similarity baseline algorithm (skills 50%, interests 25%, competitions 25%) |
+
+### Planned / Future Roadmap
+| Layer | Technology / Feature |
+|---|---|
+| Domain Models | Competition, CompetitionMember, TeamRequirement, TeamInvite, Recommendation, Moderation |
+| Matching v2 | Team-aware cold-start matcher with role complementarity & score versioning |
+| Auth Hardening | Email verification tokens, password reset workflow, cookie-based sessions, rate limiting |
+| Realtime Scaling | Redis adapter (`@socket.io/redis-adapter`) & server-side socket room authorization |
+| Safety Layer | Report & block user workflow, moderation queue, invite rate limits |
 
 ---
 
-## Core Idea
-
-1. **Discover** — pick a curated competition.
-2. **Onboard** — declare skills, role, experience, availability, interests, portfolio.
-3. **Define team gap** — state what the team still needs.
-4. **Match** — get ranked, *explained* candidate recommendations ("Fills your ML gap", "Availability overlaps").
-5. **Trust** — inspect profile evidence and reliability signals before inviting.
-6. **Invite** — send a controlled invite (pending/accepted/rejected).
-7. **Collaborate** — realtime team chat, authorized per team membership.
-8. **Complete** — record participation outcome, feeding the feedback loop.
-
-**Explicitly out of scope for v1:** general social feed, swipe-style discovery, freelancer marketplace, autonomous AI team formation, large-scale competition scraping.
-
----
-
-## Quick Start
+## Quick Start & Local Setup
 
 ### Prerequisites
-- Node.js v18+
-- PostgreSQL (local or via Docker)
-- OpenAI API key
+* Node.js (v18+)
+* PostgreSQL database (local installation, Neon, or Docker)
+* OpenAI / OpenRouter API Key (Optional for AI summaries)
 
-### 1. Clone & configure
-```bash
-git clone <repo-url>
-cd competition-teammate-finder
-cp .env.example .env
-```
-
-Fill in `.env`:
-```env
-DATABASE_URL="postgresql://user:password@localhost:5432/teammatefinder?schema=public"
-JWT_SECRET="your-super-secret-jwt-key"
-OPENAI_API_KEY="sk-your-openai-key"
-PORT=5000
-CLIENT_URL="http://localhost:3000"
-```
-
-### 2. Database (Docker, optional)
-```bash
-docker compose up -d
-```
-
-### 3. Backend
+### 1. Backend Setup
 ```bash
 cd backend
+cp .env.example .env
 npm install
-npx prisma generate
-npx prisma migrate dev
-npx prisma db seed
-node src/server.js
 ```
 
-### 4. Frontend
+Configure `backend/.env` with your database URL and JWT secret:
+```env
+PORT=5000
+CORS_ORIGIN="http://localhost:3000"
+DB_URL="postgresql://username:password@localhost:5432/teammatefinder?schema=public"
+DIRECT_URL="postgresql://username:password@localhost:5432/teammatefinder?schema=public"
+JWT_SECRET="your-super-secret-jwt-key"
+OPENAI_API_KEY="sk-your-openai-api-key"
+```
+
+Initialize database & seed mock data:
+```bash
+npm run prisma:generate
+npm run prisma:migrate
+npm run seed
+```
+
+Start the backend server:
+```bash
+npm run dev
+# or: npm start
+```
+Backend runs on `http://localhost:5000`.
+
+### 2. Frontend Setup
+In a new terminal:
 ```bash
 cd frontend
 npm install
-npm start
+npm run dev
 ```
-
-Visit `http://localhost:3000`.
+Frontend dev server runs on `http://localhost:3000`.
 
 ---
 
@@ -94,108 +93,77 @@ Visit `http://localhost:3000`.
 
 ```
 competition-teammate-finder/
-├── frontend/
-│   └── src/
-│       ├── app/            # router, providers, global config
-│       ├── components/     # ui, forms, profile, matching, teams, chat, safety
-│       ├── pages/          # Landing, Auth, Onboarding, Competitions, Discover, Teams...
-│       ├── hooks/ store/ types/ utils/
+├── CLAUDE.md                    # Main AI context & handoff documentation
+├── README.md                    # Project quick start & state
+├── Competition_Teammate_Finder_Revised_Master_Plan.pdf # Master product spec
 ├── backend/
-│   └── src/
-│       ├── routes/ controllers/
-│       ├── services/        # auth, competition, matching, team, invitation, moderation, analytics
-│       ├── ai/               # client, prompts, summarization, cache
-│       ├── matching/         # features, cold-start, scoring, explanations, evaluation
-│       ├── analytics/        # events, metrics
-│       ├── socket/           # auth, rooms, redis adapter
-│       └── server.js
-│   └── prisma/ (schema, migrations, seed)
-├── docs/
-│   ├── product.md      # full plan (this document's source of truth)
-│   ├── architecture.md
-│   ├── matching.md
-│   ├── safety.md
-│   ├── privacy.md
-│   └── analytics.md
-└── .github/workflows/ci.yml
+│   ├── .env.example
+│   ├── package.json
+│   ├── server.js               # Express + Socket.io entry point
+│   ├── middleware/
+│   │   ├── auth.js             # JWT authentication middleware
+│   │   └── admin.js            # Admin role authorization middleware
+│   ├── services/
+│   │   └── competition.service.js # Competition domain service & status lifecycle helper
+│   ├── prisma/
+│   │   ├── schema.prisma       # Prisma data models (User, Profile, Competition, Team, etc.)
+│   │   └── seed.js             # Seed database script
+│   ├── routes/
+│   │   ├── auth.js             # Signup, login, current user endpoints
+│   │   ├── competition.js      # Competition CRUD & status lifecycle management
+│   │   ├── profile.js          # Profile lookup, update, summary generation
+│   │   ├── match.js            # Baseline similarity matching
+│   │   ├── team.js             # Team CRUD & membership operations
+│   │   ├── chat.js             # Chat history REST endpoints
+│   │   ├── ai.js               # AI team suggestion generator
+│   │   └── suggestions.js      # Saved AI suggestions
+│   └── utils/
+│       ├── matching.js         # Cosine similarity vector matching logic
+│       └── openai.js           # OpenAI & OpenRouter integration
+└── frontend/
+    ├── package.json
+    ├── vite.config.ts          # Vite configuration & proxy routes
+    ├── index.html
+    └── src/
+        ├── App.tsx             # React router & protected route wrappers
+        ├── main.tsx
+        ├── store/
+        │   └── useStore.ts     # Zustand global store & Socket.io client handlers
+        ├── components/
+        │   ├── Layout.tsx      # Sidebar & top navigation layout
+        │   └── ui/             # Reusable UI components (button, card, dialog, input)
+        └── pages/
+            ├── Landing.tsx     # Public landing page with demo sandbox
+            ├── Login.tsx       # Sign in page
+            ├── Signup.tsx      # Sign up page
+            ├── Dashboard.tsx   # Teammate Finder matching list & profile inspector
+            ├── Profile.tsx     # User profile page
+            ├── Messages.tsx    # Realtime team collaboration channels & chat
+            └── Settings.tsx   # Profile editing & AI Suggestion Hub
 ```
 
 ---
 
-## Matching Engine
+## Development & Testing Commands
 
-Deterministic and explainable by default — no opaque black-box scoring.
-
-| Signal | Weight (v1) |
-|---|---|
-| Skill fit | 30% |
-| Role complementarity | 25% |
-| Competition fit | 15% |
-| Availability overlap | 10% |
-| Experience fit | 10% |
-| Reliability / activity | 10% (zero-weighted at cold start) |
-
-Weights are a versioned hypothesis (`scoreVersion`), not a proven optimum — see [`docs/matching.md`](docs/matching.md) for the evaluation loop.
-
-**Cold start:** with no behavioral history, the system falls back to declared-profile signals only (skills, role, availability, competition fit) rather than withholding recommendations or fabricating reliability data.
-
----
-
-## Safety
-
-This product connects strangers and provides realtime chat, so safety is a first-class feature:
-- Report & block
-- Admin moderation queue + suspension/ban
-- Rate limits on invites/messages (esp. new accounts)
-- Socket.io messages authorized per team membership only
-
-See [`docs/safety.md`](docs/safety.md).
-
----
-
-## Feedback Loop
-
-Every recommendation gets a stable `recommendationId` + `scoreVersion`, tracked through:
-
-```
-recommendation → open → invite_sent → invite_accepted → team_joined → competition_completed
+### Backend Commands
+```bash
+npm run dev            # Start backend with nodemon
+npm start              # Start backend with node
+npm run prisma:generate # Generate Prisma client
+npm run prisma:migrate  # Run database migrations
+npm run seed           # Seed sample users and teams
 ```
 
-This turns "tune the weights later" into something actually measurable. See [`docs/analytics.md`](docs/analytics.md).
-
----
-
-## Roadmap
-
-| Phase | Focus |
-|---|---|
-| 0 | Foundation — cleanup, env hygiene, schema, baseline tests |
-| 1 | Competition core — admin-curated competitions, onboarding |
-| 2 | Matching core — cold start, weighted scoring, explanations |
-| 3 | Feedback loop — recommendation IDs, event schema |
-| 4 | Safety — report, block, moderation, rate limits |
-| 5 | Auth + privacy — verification, reset, deletion policy |
-| 6 | Trust layer — portfolio, availability, reliability indicators |
-| 7 | AI hardening — caching, fallback, cost control |
-| 8 | Realtime hardening — socket auth, Redis adapter |
-| 9 | Product polish — responsive UI, empty/error states, accessibility |
-| 10 | Ship + measure — CI, deployment, monitoring, demo |
-| 11 | ML evolution (P2) — only once real outcome data exists |
-
-Full detail, exit criteria, and rationale: [`docs/product.md`](docs/product.md).
-
----
-
-## Contributing
-
-1. Fork the repo and create a feature branch.
-2. Install dependencies and run locally (see Quick Start).
-3. Keep business logic in `services/`, not route handlers.
-4. Add tests for matching, auth, and safety-critical flows.
-5. Open a PR with a clear description.
+### Frontend Commands
+```bash
+npm run dev            # Start Vite development server
+npm run build          # Typecheck & build production bundle
+npm run lint           # Run ESLint analysis
+npm run preview        # Preview production build locally
+```
 
 ---
 
 ## License
-
-MIT — see `LICENSE`.
+MIT — see `LICENSE` for details.

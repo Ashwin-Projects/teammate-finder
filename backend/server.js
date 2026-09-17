@@ -12,6 +12,7 @@ const teamRoutes = require('./routes/team');
 const chatRoutes = require('./routes/chat');
 const aiRoutes = require('./routes/ai');
 const suggestionRoutes = require('./routes/suggestions');
+const competitionRoutes = require('./routes/competition');
 
 const app = express();
 const server = http.createServer(app);
@@ -32,6 +33,7 @@ app.use('/api/team', teamRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/suggestions', suggestionRoutes);
+app.use('/api/competitions', competitionRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

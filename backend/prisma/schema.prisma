@@ -11,18 +11,30 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+enum CompetitionStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
 model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
-  name         String
-  passwordHash String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                  String              @id @default(uuid())
+  email               String              @unique
+  name                String
+  passwordHash        String
+  role                String              @default("user")
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
   
-  profile      Profile?
-  sentMessages Message[]
-  teamMembers  TeamMember[]
-  savedSuggestions SavedSuggestion[]
+  profile             Profile?
+  sentMessages        Message[]
+  teamMembers         TeamMember[]
+  savedSuggestions    SavedSuggestion[]
+  createdCompetitions Competition[]       @relation("CreatedCompetitions")
+  competitionMembers  CompetitionMember[]
 }
 
 model Profile {
@@ -41,16 +53,49 @@ model Profile {
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model Team {
-  id          String       @id @default(uuid())
-  name        String
-  description String?
-  summary     String?      // AI-generated team summary
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+model Competition {
+  id              String            @id @default(uuid())
+  name            String
+  description     String?
+  organizer       String?
+  startDate       DateTime?
+  endDate         DateTime?
+  maxTeamSize     Int               @default(4)
+  requiredSkills  String[]          @default([])
+  status          CompetitionStatus @default(DRAFT)
+  createdByUserId String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  createdByUser   User?             @relation("CreatedCompetitions", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  teams           Team[]
+  members         CompetitionMember[]
+}
+
+model CompetitionMember {
+  id            String      @id @default(uuid())
+  competitionId String
+  userId        String
+  joinedAt      DateTime    @default(now())
   
-  members     TeamMember[]
-  messages    Message[]
+  competition   Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId, userId])
+}
+
+model Team {
+  id            String       @id @default(uuid())
+  name          String
+  description   String?
+  summary       String?      // AI-generated team summary
+  competitionId String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  
+  competition   Competition? @relation(fields: [competitionId], references: [id], onDelete: SetNull)
+  members       TeamMember[]
+  messages      Message[]
 }
 
 model TeamMember {
